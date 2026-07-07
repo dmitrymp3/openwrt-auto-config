@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.3"
+VERSION="1.3.1"
 
 log()  { echo ">>> $*"; }
 ok()   { echo "    OK: $*"; }
@@ -47,20 +47,24 @@ uci commit network && ok "network commit" || fail "uci commit network"
 echo ""
 
 # ── Шаг 2: Wi-Fi ─────────────────────────────────────────────────────────────
-# Интерфейсы специфичны для QWRT на WH3000 PRO (MediaTek mt_dbdc драйвер):
-#   ra / ra0  — 2.4GHz
-#   rax / rax0 — 5GHz
-log "Шаг 2: Настройка Wi-Fi 2.4GHz (ra0)..."
+# Стандартные интерфейсы OpenWrt (mac80211):
+#   radio0 / default_radio0 — 2.4GHz
+#   radio1 / default_radio1 — 5GHz
+log "Шаг 2: Настройка Wi-Fi 2.4GHz (radio0)..."
 
-uci set wireless.ra0.ssid="$WIFI_SSID" && ok "2.4G ssid = $WIFI_SSID" || fail "uci set ra0 ssid"
-uci set wireless.ra0.encryption='psk2'  && ok "2.4G encryption = psk2" || fail "uci set ra0 encryption"
-uci set wireless.ra0.key="$WIFI_PASS"   && ok "2.4G key set"           || fail "uci set ra0 key"
+uci set wireless.radio0.disabled='0'          && ok "2.4G radio включён"      || fail "uci set radio0 disabled"
+uci set wireless.default_radio0.disabled='0'  && ok "2.4G iface включён"      || fail "uci set default_radio0 disabled"
+uci set wireless.default_radio0.ssid="$WIFI_SSID" && ok "2.4G ssid = $WIFI_SSID" || fail "uci set default_radio0 ssid"
+uci set wireless.default_radio0.encryption='psk2' && ok "2.4G encryption = psk2" || fail "uci set default_radio0 encryption"
+uci set wireless.default_radio0.key="$WIFI_PASS"  && ok "2.4G key set"           || fail "uci set default_radio0 key"
 
-log "Шаг 2: Настройка Wi-Fi 5GHz (rax0)..."
+log "Шаг 2: Настройка Wi-Fi 5GHz (radio1)..."
 
-uci set wireless.rax0.ssid="$WIFI_SSID" && ok "5G ssid = $WIFI_SSID" || fail "uci set rax0 ssid"
-uci set wireless.rax0.encryption='psk2'  && ok "5G encryption = psk2" || fail "uci set rax0 encryption"
-uci set wireless.rax0.key="$WIFI_PASS"   && ok "5G key set"           || fail "uci set rax0 key"
+uci set wireless.radio1.disabled='0'          && ok "5G radio включён"        || fail "uci set radio1 disabled"
+uci set wireless.default_radio1.disabled='0'  && ok "5G iface включён"        || fail "uci set default_radio1 disabled"
+uci set wireless.default_radio1.ssid="$WIFI_SSID" && ok "5G ssid = $WIFI_SSID"   || fail "uci set default_radio1 ssid"
+uci set wireless.default_radio1.encryption='psk2' && ok "5G encryption = psk2"   || fail "uci set default_radio1 encryption"
+uci set wireless.default_radio1.key="$WIFI_PASS"  && ok "5G key set"             || fail "uci set default_radio1 key"
 
 uci commit wireless && ok "wireless commit" || fail "uci commit wireless"
 wifi reload && ok "wifi reload" || fail "wifi reload"
