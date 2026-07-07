@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.6"
+VERSION="1.7"
 
 log()  { echo ">>> $*"; }
 ok()   { echo "    OK: $*"; }
@@ -19,6 +19,7 @@ fail() { echo "    ОШИБКА: $*"; exit 1; }
 # --admin PASS  пароль root             (по умолчанию: не менять)
 # --sub URL     URL подписки Remnawave  (по умолчанию: не добавлять)
 # --subnet N    третий октет подсети    (например: 15 → 192.168.15.1, по умолчанию: не менять)
+# --del-rule    удалить bootstrap firewall правило 'bootstrap-wan-allow' (если есть)
 
 WIFI_SSID="FreeDom"
 WIFI_PASS="88888888"
@@ -26,6 +27,7 @@ ADMIN_PASS=""
 SUB_URL=""
 SUBNET=""
 GENERATE=0
+DEL_RULE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -35,6 +37,7 @@ while [ $# -gt 0 ]; do
         --admin)    ADMIN_PASS="$2"; shift 2 ;;
         --sub)      SUB_URL="$2"; shift 2 ;;
         --subnet)   SUBNET="$2"; shift 2 ;;
+        --del-rule) DEL_RULE=1; shift ;;
         *) echo "Неизвестный параметр: $1"; exit 1 ;;
     esac
 done
@@ -106,11 +109,17 @@ echo ""
 # ── Шаг 4: Пакеты ────────────────────────────────────────────────────────────
 log "Шаг 4: Установка пакетов..."
 
+# Firewall может блокировать wget при установке kmod-модулей (EPERM).
+# Временно останавливаем его на время установки пакетов.
+/etc/init.d/firewall stop 2>/dev/null; ok "firewall остановлен"
+
 apk update && ok "apk update" || fail "apk update"
 apk add bash iptables dnsmasq-full curl ca-bundle ipset ip-full \
     iptables-mod-tproxy iptables-mod-extra ruby ruby-yaml kmod-tun \
     kmod-inet-diag unzip luci-compat luci luci-base \
     && ok "пакеты установлены" || fail "apk add"
+
+/etc/init.d/firewall start 2>/dev/null; ok "firewall запущен"
 
 echo ""
 
@@ -148,8 +157,27 @@ else
     log "Шаг 7: sub_url не передан, пропускаем подписку"
 fi
 
-# ── Шаг 8: Прочее ────────────────────────────────────────────────────────────
-log "Шаг 8: Прочие настройки..."
+# ── Шаг 8: Удаление bootstrap firewall правила ───────────────────────────────
+if [ "$DEL_RULE" = "1" ]; then
+    log "Шаг 8: Удаление bootstrap firewall правила..."
+    DELETED=0
+    for i in $(seq 0 20); do
+        name=$(uci get firewall.@rule[$i].name 2>/dev/null) || break
+        if [ "$name" = "bootstrap-wan-allow" ]; then
+            uci delete firewall.@rule[$i] && ok "правило удалено (индекс $i)" || fail "uci delete firewall.@rule[$i]"
+            uci commit firewall && ok "firewall commit" || fail "uci commit firewall"
+            /etc/init.d/firewall reload && ok "firewall reload"
+            DELETED=1
+            break
+        fi
+    done
+    [ "$DELETED" = "0" ] && ok "правило bootstrap-wan-allow не найдено, пропускаем"
+else
+    log "Шаг 8: --del-rule не передан, firewall правило не трогаем"
+fi
+
+# ── Шаг 9: Прочее ────────────────────────────────────────────────────────────
+log "Шаг 9: Прочие настройки..."
 uci set attendedsysupgrade.client.login_check_for_upgrades='1'
 uci commit attendedsysupgrade && ok "attendedsysupgrade настроен"
 
