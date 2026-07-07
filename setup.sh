@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.14"
+VERSION="1.15"
 
 # ── Константы ──────────────────────────────────────────────────────────────────
 SUB_NAME="mp3-rules"   # имя подписки OpenClash (используется в UCI и при обновлении)
@@ -48,6 +48,10 @@ done
 if [ "$GENERATE" = "1" ]; then
     WIFI_SSID="FD-$(cat /dev/urandom | tr -dc '0-9' | head -c 2)"
     WIFI_PASS=$(cat /dev/urandom | tr -dc '0-9' | head -c 8)
+fi
+
+# Пароль root генерируется всегда если не задан явно
+if [ -z "$ADMIN_PASS" ]; then
     ADMIN_PASS=$(cat /dev/urandom | tr -dc '0-9' | head -c 8)
 fi
 
@@ -58,9 +62,7 @@ echo "  v$VERSION"
 echo "====================================="
 echo "  SSID:       $WIFI_SSID"
 echo "  Wi-Fi pass: $WIFI_PASS"
-if [ -n "$ADMIN_PASS" ]; then
 echo "  Admin pass: $ADMIN_PASS"
-fi
 if [ -n "$SUBNET" ]; then
 echo "  Subnet:     192.168.$SUBNET.0/24"
 fi
@@ -113,12 +115,8 @@ wget -qO /etc/dropbear/authorized_keys \
 chmod 600 /etc/dropbear/authorized_keys
 
 # ── Шаг 4: Пароль root ───────────────────────────────────────────────────────
-if [ -n "$ADMIN_PASS" ]; then
-    log "Шаг 4: Установка пароля root..."
-    printf '%s\n%s\n' "$ADMIN_PASS" "$ADMIN_PASS" | passwd root && ok "пароль установлен" || fail "passwd root"
-else
-    log "Шаг 4: --admin не передан, пароль root не меняем"
-fi
+log "Шаг 4: Установка пароля root..."
+printf '%s\n%s\n' "$ADMIN_PASS" "$ADMIN_PASS" | passwd root && ok "пароль установлен" || fail "passwd root"
 
 # ── Шаг 4: Пакеты ────────────────────────────────────────────────────────────
 log "Шаг 4: Установка пакетов..."
@@ -210,13 +208,25 @@ uci set dhcp.lan.ra='disabled'
 uci commit dhcp && ok "IPv6 отключён (dhcp commit)"
 # network commit — в финальном блоке ниже
 
-# ── Шаг 11: Прочее ───────────────────────────────────────────────────────────
-log "Шаг 11: Прочие настройки..."
+# ── Шаг 11: Firewall — разрешить SSH с WAN ───────────────────────────────────
+log "Шаг 11: Открытие SSH (порт 22) с WAN..."
+uci add firewall rule > /dev/null
+uci set firewall.@rule[-1].name='allow-ssh-wan'
+uci set firewall.@rule[-1].src='wan'
+uci set firewall.@rule[-1].dest_port='22'
+uci set firewall.@rule[-1].proto='tcp'
+uci set firewall.@rule[-1].target='ACCEPT'
+uci commit firewall && ok "SSH с WAN разрешён"
+
+# ── Шаг 12: Прочее ───────────────────────────────────────────────────────────
+log "Шаг 12: Прочие настройки..."
 uci set attendedsysupgrade.client.login_check_for_upgrades='1'
 uci commit attendedsysupgrade && ok "attendedsysupgrade настроен"
 
 echo "====================================="
 echo "  Готово! Ошибок нет."
+echo "====================================="
+echo "  Admin pass: $ADMIN_PASS"
 echo "====================================="
 echo ""
 
