@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.7"
+VERSION="1.8"
 
 log()  { echo ">>> $*"; }
 ok()   { echo "    OK: $*"; }
@@ -157,9 +157,19 @@ else
     log "Шаг 7: sub_url не передан, пропускаем подписку"
 fi
 
-# ── Шаг 8: Удаление bootstrap firewall правила ───────────────────────────────
+# ── Шаг 8: Запуск и автообновление OpenClash ─────────────────────────────────
+log "Шаг 8: Настройка и запуск OpenClash..."
+uci set openclash.config.enable='1'
+uci set openclash.config.auto_update='1'
+uci set openclash.config.auto_update_time='60'
+uci set openclash.config.config_auto_update_mode='1'
+uci set openclash.config.config_update_interval='60'
+uci commit openclash && ok "OpenClash включён, автообновление 60 мин" || fail "uci commit openclash"
+# bash /usr/share/openclash/openclash_update.sh one_key_update
+
+# ── Шаг 9: Удаление bootstrap firewall правила ───────────────────────────────
 if [ "$DEL_RULE" = "1" ]; then
-    log "Шаг 8: Удаление bootstrap firewall правила..."
+    log "Шаг 9: Удаление bootstrap firewall правила..."
     DELETED=0
     for i in $(seq 0 20); do
         name=$(uci get firewall.@rule[$i].name 2>/dev/null) || break
@@ -173,10 +183,10 @@ if [ "$DEL_RULE" = "1" ]; then
     done
     [ "$DELETED" = "0" ] && ok "правило bootstrap-wan-allow не найдено, пропускаем"
 else
-    log "Шаг 8: --del-rule не передан, firewall правило не трогаем"
+    log "Шаг 9: --del-rule не передан, firewall правило не трогаем"
 fi
 
-# ── Шаг 9: Прочее ────────────────────────────────────────────────────────────
+# ── Шаг 10: Прочее ───────────────────────────────────────────────────────────
 log "Шаг 9: Прочие настройки..."
 uci set attendedsysupgrade.client.login_check_for_upgrades='1'
 uci commit attendedsysupgrade && ok "attendedsysupgrade настроен"
