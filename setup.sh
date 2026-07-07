@@ -1,9 +1,9 @@
 #!/bin/sh
 # setup.sh — Автонастройка OpenWrt роутера
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
-#   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/USER/REPO/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
+#   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.2"
+VERSION="1.3"
 
 log()  { echo ">>> $*"; }
 ok()   { echo "    OK: $*"; }
@@ -72,14 +72,29 @@ echo ""
 # echo "root:ПАРОЛЬ" | chpasswd && ok "пароль установлен" || fail "chpasswd"
 
 # ── Шаг 4: Пакеты ────────────────────────────────────────────────────────────
-# log "Шаг 4: Установка пакетов..."
-# apk update && ok "apk update" || fail "apk update"
-# apk add curl kmod-tun bash coreutils ca-bundle ruby ruby-yaml && ok "пакеты установлены" || fail "apk add"
+log "Шаг 4: Установка пакетов..."
+
+apk update && ok "apk update" || fail "apk update"
+apk add bash iptables dnsmasq-full curl ca-bundle ipset ip-full \
+    iptables-mod-tproxy iptables-mod-extra ruby ruby-yaml kmod-tun \
+    kmod-inet-diag unzip luci-compat luci luci-base \
+    && ok "пакеты установлены" || fail "apk add"
+
+echo ""
 
 # ── Шаг 5: OpenClash ─────────────────────────────────────────────────────────
-# log "Шаг 5: Установка OpenClash..."
-# wget -O /tmp/openclash.ipk "https://github.com/vernesong/OpenClash/releases/..." && ok "IPK скачан" || fail "wget openclash"
-# apk add --allow-untrusted /tmp/openclash.ipk && ok "OpenClash установлен" || fail "apk add openclash"
+log "Шаг 5: Установка OpenClash..."
+
+curl -L --retry 2 https://api.github.com/repos/vernesong/OpenClash/releases/latest \
+    -o /tmp/openclash_version && ok "версия получена" || fail "получение версии OpenClash"
+
+download_url=$(cat /tmp/openclash_version | jsonfilter -e '@.assets[*].browser_download_url' | grep '\.apk$')
+[ -n "$download_url" ] && ok "URL: $download_url" || fail "URL .apk не найден"
+
+curl -L --retry 2 "$download_url" -o /tmp/openclash.apk && ok "OpenClash скачан" || fail "скачивание OpenClash"
+
+apk add -q --force-overwrite --clean-protected --allow-untrusted /tmp/openclash.apk \
+    && ok "OpenClash установлен" || fail "установка OpenClash"
 
 # ── Шаг 6: Mihomo core ───────────────────────────────────────────────────────
 # log "Шаг 6: Установка mihomo core..."
