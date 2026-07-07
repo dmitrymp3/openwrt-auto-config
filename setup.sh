@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.10"
+VERSION="1.11"
 
 # ── Константы ──────────────────────────────────────────────────────────────────
 SUB_NAME="mp3-rules"   # имя подписки OpenClash (используется в UCI и при обновлении)
@@ -188,8 +188,16 @@ else
     log "Шаг 9: --del-rule не передан, firewall правило не трогаем"
 fi
 
-# ── Шаг 10: Прочее ───────────────────────────────────────────────────────────
-log "Шаг 9: Прочие настройки..."
+# ── Шаг 10: Отключение IPv6 ──────────────────────────────────────────────────
+log "Шаг 10: Отключение IPv6 на LAN..."
+uci set network.lan.ipv6='0'
+uci set dhcp.lan.dhcpv6='disabled'
+uci set dhcp.lan.ra='disabled'
+uci commit dhcp && ok "IPv6 отключён (dhcp commit)"
+# network commit — в финальном блоке ниже
+
+# ── Шаг 11: Прочее ───────────────────────────────────────────────────────────
+log "Шаг 11: Прочие настройки..."
 uci set attendedsysupgrade.client.login_check_for_upgrades='1'
 uci commit attendedsysupgrade && ok "attendedsysupgrade настроен"
 
