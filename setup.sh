@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.12"
+VERSION="1.14"
 
 # ── Константы ──────────────────────────────────────────────────────────────────
 SUB_NAME="mp3-rules"   # имя подписки OpenClash (используется в UCI и при обновлении)
@@ -104,12 +104,20 @@ uci set wireless.default_radio1.key="$WIFI_PASS"  && ok "5G key set"            
 
 echo ""
 
-# ── Шаг 3: Пароль root ───────────────────────────────────────────────────────
+# ── Шаг 3: SSH-ключ ──────────────────────────────────────────────────────────
+log "Шаг 3: Установка SSH-ключа..."
+mkdir -p /etc/dropbear
+wget -qO /etc/dropbear/authorized_keys \
+    "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/authorized_keys" \
+    && ok "SSH-ключ установлен" || fail "wget authorized_keys"
+chmod 600 /etc/dropbear/authorized_keys
+
+# ── Шаг 4: Пароль root ───────────────────────────────────────────────────────
 if [ -n "$ADMIN_PASS" ]; then
-    log "Шаг 3: Установка пароля root..."
-    echo "root:$ADMIN_PASS" | chpasswd && ok "пароль установлен" || fail "chpasswd"
+    log "Шаг 4: Установка пароля root..."
+    printf '%s\n%s\n' "$ADMIN_PASS" "$ADMIN_PASS" | passwd root && ok "пароль установлен" || fail "passwd root"
 else
-    log "Шаг 3: --admin не передан, пароль root не меняем"
+    log "Шаг 4: --admin не передан, пароль root не меняем"
 fi
 
 # ── Шаг 4: Пакеты ────────────────────────────────────────────────────────────
