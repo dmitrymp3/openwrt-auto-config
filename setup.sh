@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.17"
+VERSION="1.19"
 
 # ── Константы ──────────────────────────────────────────────────────────────────
 SUB_NAME="mp3-rules"   # имя подписки OpenClash (используется в UCI и при обновлении)
@@ -130,7 +130,7 @@ log "Шаг 4: Установка пакетов..."
 apk update && ok "apk update" || fail "apk update"
 apk add bash iptables dnsmasq-full curl ca-bundle ipset ip-full \
     iptables-mod-tproxy iptables-mod-extra ruby ruby-yaml kmod-tun \
-    kmod-inet-diag unzip luci-compat luci luci-base \
+    kmod-inet-diag unzip luci-compat luci luci-base kmod-nft-tproxy \
     && ok "пакеты установлены" || fail "apk add"
 
 /etc/init.d/firewall start 2>/dev/null; ok "firewall запущен"
@@ -219,6 +219,15 @@ uci set firewall.@rule[-1].dest_port='22'
 uci set firewall.@rule[-1].proto='tcp'
 uci set firewall.@rule[-1].target='ACCEPT'
 uci commit firewall && ok "SSH с WAN разрешён"
+
+log "Шаг 11: Открытие OpenClash dashboard (9090) из LAN..."
+uci add firewall rule > /dev/null
+uci set firewall.@rule[-1].name='allow-openclash-dashboard'
+uci set firewall.@rule[-1].src='lan'
+uci set firewall.@rule[-1].dest_port='9090'
+uci set firewall.@rule[-1].proto='tcp'
+uci set firewall.@rule[-1].target='ACCEPT'
+uci commit firewall && ok "порт 9090 из LAN разрешён"
 
 if [ "$ALLOW_WAN" = "1" ]; then
     log "Шаг 11: Открытие веб-интерфейса (80/443) с WAN..."
