@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.9"
+VERSION="1.10"
 
 # ── Константы ──────────────────────────────────────────────────────────────────
 SUB_NAME="mp3-rules"   # имя подписки OpenClash (используется в UCI и при обновлении)
@@ -73,8 +73,7 @@ echo ""
 # ── Шаг 1: LAN подсеть (только staging, без применения) ─────────────────────
 if [ -n "$SUBNET" ]; then
     log "Шаг 1: Подготовка LAN подсети (192.168.$SUBNET.0/24)..."
-    uci set network.lan.ipaddr="192.168.$SUBNET.1" && ok "ipaddr = 192.168.$SUBNET.1" || fail "uci set ipaddr"
-    uci set network.lan.netmask='255.255.255.0'    && ok "netmask = 255.255.255.0"     || fail "uci set netmask"
+    uci set network.lan.ipaddr="192.168.$SUBNET.1/24" && ok "ipaddr = 192.168.$SUBNET.1/24" || fail "uci set ipaddr"
 else
     log "Шаг 1: --subnet не передан, LAN не меняем"
 fi
