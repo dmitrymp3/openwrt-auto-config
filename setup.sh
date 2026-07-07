@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.11"
+VERSION="1.12"
 
 # ── Константы ──────────────────────────────────────────────────────────────────
 SUB_NAME="mp3-rules"   # имя подписки OpenClash (используется в UCI и при обновлении)
@@ -105,8 +105,12 @@ uci set wireless.default_radio1.key="$WIFI_PASS"  && ok "5G key set"            
 echo ""
 
 # ── Шаг 3: Пароль root ───────────────────────────────────────────────────────
-# log "Шаг 3: Установка пароля root..."
-# echo "root:ПАРОЛЬ" | chpasswd && ok "пароль установлен" || fail "chpasswd"
+if [ -n "$ADMIN_PASS" ]; then
+    log "Шаг 3: Установка пароля root..."
+    echo "root:$ADMIN_PASS" | chpasswd && ok "пароль установлен" || fail "chpasswd"
+else
+    log "Шаг 3: --admin не передан, пароль root не меняем"
+fi
 
 # ── Шаг 4: Пакеты ────────────────────────────────────────────────────────────
 log "Шаг 4: Установка пакетов..."
@@ -167,6 +171,8 @@ uci set openclash.config.auto_update_time='60'
 uci set openclash.config.config_auto_update_mode='1'
 uci set openclash.config.config_update_interval='60'
 uci commit openclash && ok "OpenClash включён, автообновление 60 мин" || fail "uci commit openclash"
+log "Пауза 10 сек перед загрузкой конфига подписки..."
+sleep 10
 bash /usr/share/openclash/openclash.sh "$SUB_NAME" && ok "конфиг подписки загружен" || ok "конфиг подписки: см. лог /tmp/openclash.log"
 
 # ── Шаг 9: Удаление bootstrap firewall правила ───────────────────────────────
