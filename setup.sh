@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.15"
+VERSION="1.17"
 
 # ── Константы ──────────────────────────────────────────────────────────────────
 SUB_NAME="mp3-rules"   # имя подписки OpenClash (используется в UCI и при обновлении)
@@ -31,16 +31,18 @@ SUB_URL=""
 SUBNET=""
 GENERATE=0
 DEL_RULE=0
+ALLOW_WAN=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --generate) GENERATE=1; shift ;;
-        --ssid)     WIFI_SSID="$2"; shift 2 ;;
-        --pass)     WIFI_PASS="$2"; shift 2 ;;
-        --admin)    ADMIN_PASS="$2"; shift 2 ;;
-        --sub)      SUB_URL="$2"; shift 2 ;;
-        --subnet)   SUBNET="$2"; shift 2 ;;
-        --del-rule) DEL_RULE=1; shift ;;
+        --generate)   GENERATE=1; shift ;;
+        --ssid)       WIFI_SSID="$2"; shift 2 ;;
+        --pass)       WIFI_PASS="$2"; shift 2 ;;
+        --admin)      ADMIN_PASS="$2"; shift 2 ;;
+        --sub)        SUB_URL="$2"; shift 2 ;;
+        --subnet)     SUBNET="$2"; shift 2 ;;
+        --del-rule)   DEL_RULE=1; shift ;;
+        --allow-wan)  ALLOW_WAN=1; shift ;;
         *) echo "Неизвестный параметр: $1"; exit 1 ;;
     esac
 done
@@ -50,9 +52,9 @@ if [ "$GENERATE" = "1" ]; then
     WIFI_PASS=$(cat /dev/urandom | tr -dc '0-9' | head -c 8)
 fi
 
-# Пароль root генерируется всегда если не задан явно
+# Пароль root генерируется всегда если не задан явно (10 букв+цифр + 2 спецсимвола)
 if [ -z "$ADMIN_PASS" ]; then
-    ADMIN_PASS=$(cat /dev/urandom | tr -dc '0-9' | head -c 8)
+    ADMIN_PASS="$(cat /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 10)$(cat /dev/urandom | tr -dc '!@#%^*_+=' | head -c 2)"
 fi
 
 echo ""
@@ -208,7 +210,7 @@ uci set dhcp.lan.ra='disabled'
 uci commit dhcp && ok "IPv6 отключён (dhcp commit)"
 # network commit — в финальном блоке ниже
 
-# ── Шаг 11: Firewall — разрешить SSH с WAN ───────────────────────────────────
+# ── Шаг 11: Firewall — разрешить SSH (и опционально веб) с WAN ───────────────
 log "Шаг 11: Открытие SSH (порт 22) с WAN..."
 uci add firewall rule > /dev/null
 uci set firewall.@rule[-1].name='allow-ssh-wan'
@@ -217,6 +219,17 @@ uci set firewall.@rule[-1].dest_port='22'
 uci set firewall.@rule[-1].proto='tcp'
 uci set firewall.@rule[-1].target='ACCEPT'
 uci commit firewall && ok "SSH с WAN разрешён"
+
+if [ "$ALLOW_WAN" = "1" ]; then
+    log "Шаг 11: Открытие веб-интерфейса (80/443) с WAN..."
+    uci add firewall rule > /dev/null
+    uci set firewall.@rule[-1].name='allow-web-wan'
+    uci set firewall.@rule[-1].src='wan'
+    uci set firewall.@rule[-1].dest_port='443'
+    uci set firewall.@rule[-1].proto='tcp'
+    uci set firewall.@rule[-1].target='ACCEPT'
+    uci commit firewall && ok "веб-интерфейс с WAN разрешён"
+fi
 
 # ── Шаг 12: Прочее ───────────────────────────────────────────────────────────
 log "Шаг 12: Прочие настройки..."
