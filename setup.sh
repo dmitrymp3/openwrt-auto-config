@@ -3,7 +3,7 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.4"
+VERSION="1.6"
 
 log()  { echo ">>> $*"; }
 ok()   { echo "    OK: $*"; }
@@ -11,18 +11,20 @@ fail() { echo "    ОШИБКА: $*"; exit 1; }
 
 # ── Параметры ─────────────────────────────────────────────────────────────────
 # Использование (все флаги опциональны, порядок не важен):
-#   sh setup.sh [--generate] [--ssid NAME] [--pass PASS] [--admin PASS] [--sub URL]
+#   sh setup.sh [--generate] [--ssid NAME] [--pass PASS] [--admin PASS] [--sub URL] [--subnet N]
 #
-# --generate   сгенерировать случайные SSID (FD-XX) и пароли
-# --ssid NAME  имя Wi-Fi сети       (по умолчанию: FreeDom)
-# --pass PASS  пароль Wi-Fi         (по умолчанию: 88888888)
-# --admin PASS пароль root          (по умолчанию: не менять)
-# --sub URL    URL подписки Remnawave (по умолчанию: не добавлять)
+# --generate    сгенерировать случайные SSID (FD-XX) и пароли
+# --ssid NAME   имя Wi-Fi сети          (по умолчанию: FreeDom)
+# --pass PASS   пароль Wi-Fi            (по умолчанию: 88888888)
+# --admin PASS  пароль root             (по умолчанию: не менять)
+# --sub URL     URL подписки Remnawave  (по умолчанию: не добавлять)
+# --subnet N    третий октет подсети    (например: 15 → 192.168.15.1, по умолчанию: не менять)
 
 WIFI_SSID="FreeDom"
 WIFI_PASS="88888888"
 ADMIN_PASS=""
 SUB_URL=""
+SUBNET=""
 GENERATE=0
 
 while [ $# -gt 0 ]; do
@@ -32,6 +34,7 @@ while [ $# -gt 0 ]; do
         --pass)     WIFI_PASS="$2"; shift 2 ;;
         --admin)    ADMIN_PASS="$2"; shift 2 ;;
         --sub)      SUB_URL="$2"; shift 2 ;;
+        --subnet)   SUBNET="$2"; shift 2 ;;
         *) echo "Неизвестный параметр: $1"; exit 1 ;;
     esac
 done
@@ -52,19 +55,23 @@ echo "  Wi-Fi pass: $WIFI_PASS"
 if [ -n "$ADMIN_PASS" ]; then
 echo "  Admin pass: $ADMIN_PASS"
 fi
+if [ -n "$SUBNET" ]; then
+echo "  Subnet:     192.168.$SUBNET.0/24"
+fi
 if [ -n "$SUB_URL" ]; then
 echo "  Sub URL:    $SUB_URL"
 fi
 echo "====================================="
 echo ""
 
-# ── Шаг 1: LAN подсеть ───────────────────────────────────────────────────────
-log "Шаг 1: Настройка LAN подсети..."
-
-uci set network.lan.ipaddr='192.168.10.1' && ok "ipaddr = 192.168.10.1" || fail "uci set ipaddr"
-uci set network.lan.netmask='255.255.255.0' && ok "netmask = 255.255.255.0" || fail "uci set netmask"
-uci commit network && ok "network commit" || fail "uci commit network"
-/etc/init.d/network reload && ok "network reload" || fail "network reload"
+# ── Шаг 1: LAN подсеть (только staging, без применения) ─────────────────────
+if [ -n "$SUBNET" ]; then
+    log "Шаг 1: Подготовка LAN подсети (192.168.$SUBNET.0/24)..."
+    uci set network.lan.ipaddr="192.168.$SUBNET.1" && ok "ipaddr = 192.168.$SUBNET.1" || fail "uci set ipaddr"
+    uci set network.lan.netmask='255.255.255.0'    && ok "netmask = 255.255.255.0"     || fail "uci set netmask"
+else
+    log "Шаг 1: --subnet не передан, LAN не меняем"
+fi
 
 echo ""
 
@@ -88,8 +95,7 @@ uci set wireless.default_radio1.ssid="$WIFI_SSID" && ok "5G ssid = $WIFI_SSID"  
 uci set wireless.default_radio1.encryption='psk2' && ok "5G encryption = psk2"   || fail "uci set default_radio1 encryption"
 uci set wireless.default_radio1.key="$WIFI_PASS"  && ok "5G key set"             || fail "uci set default_radio1 key"
 
-uci commit wireless && ok "wireless commit" || fail "uci commit wireless"
-wifi reload && ok "wifi reload" || fail "wifi reload"
+# commit и reload — в самом конце скрипта
 
 echo ""
 
@@ -142,7 +148,35 @@ else
     log "Шаг 7: sub_url не передан, пропускаем подписку"
 fi
 
+# ── Шаг 8: Прочее ────────────────────────────────────────────────────────────
+log "Шаг 8: Прочие настройки..."
+uci set attendedsysupgrade.client.login_check_for_upgrades='1'
+uci commit attendedsysupgrade && ok "attendedsysupgrade настроен"
+
 echo "====================================="
 echo "  Готово! Ошибок нет."
 echo "====================================="
 echo ""
+
+# ── Применение сетевых настроек ──────────────────────────────────────────────
+# Все uci commit выполняются здесь — это только запись в файлы, SSH не рвётся.
+# Реальный обрыв соединения происходит при reload ниже.
+log "Применение сетевых настроек..."
+
+uci commit network  && ok "network commit"
+uci commit wireless && ok "wireless commit"
+
+echo ""
+echo "====================================="
+echo "  ⚠  Сетевые настройки применяются."
+echo "     Соединение МОЖЕТ оборваться."
+if [ -n "$SUBNET" ]; then
+echo "     Новый LAN: 192.168.$SUBNET.1"
+fi
+echo "     Wi-Fi SSID: $WIFI_SSID"
+echo "     Wi-Fi pass: $WIFI_PASS"
+echo "====================================="
+echo ""
+
+# Запускаем reload отвязанно от терминала — SIGHUP при обрыве SSH не убьёт процесс
+( /etc/init.d/network reload; wifi reload ) </dev/null >/tmp/network-reload.log 2>&1 &
