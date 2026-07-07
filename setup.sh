@@ -3,7 +3,10 @@
 # Запуск (скачать, потом выполнить — нужен интерактивный ввод):
 #   wget -O /tmp/setup.sh "https://raw.githubusercontent.com/dmitrymp3/openwrt-auto-config/refs/heads/main/setup.sh?$(date +%s)" && sh /tmp/setup.sh
 
-VERSION="1.8"
+VERSION="1.9"
+
+# ── Константы ──────────────────────────────────────────────────────────────────
+SUB_NAME="mp3-rules"   # имя подписки OpenClash (используется в UCI и при обновлении)
 
 log()  { echo ">>> $*"; }
 ok()   { echo "    OK: $*"; }
@@ -148,7 +151,7 @@ if [ -n "$SUB_URL" ]; then
     log "Шаг 7: Добавление подписки OpenClash..."
     uci add openclash config_subscribe > /dev/null
     uci set openclash.@config_subscribe[-1].enabled='1'
-    uci set openclash.@config_subscribe[-1].name='remnawave'
+    uci set openclash.@config_subscribe[-1].name="$SUB_NAME"
     uci set openclash.@config_subscribe[-1].address="$SUB_URL"
     uci set openclash.@config_subscribe[-1].sub_ua='clash-verge/v2.4.5'
     uci set openclash.@config_subscribe[-1].sub_convert='0'
@@ -165,7 +168,7 @@ uci set openclash.config.auto_update_time='60'
 uci set openclash.config.config_auto_update_mode='1'
 uci set openclash.config.config_update_interval='60'
 uci commit openclash && ok "OpenClash включён, автообновление 60 мин" || fail "uci commit openclash"
-# bash /usr/share/openclash/openclash_update.sh one_key_update
+bash /usr/share/openclash/openclash.sh "$SUB_NAME" && ok "конфиг подписки загружен" || ok "конфиг подписки: см. лог /tmp/openclash.log"
 
 # ── Шаг 9: Удаление bootstrap firewall правила ───────────────────────────────
 if [ "$DEL_RULE" = "1" ]; then
